@@ -597,7 +597,7 @@ if page == "📊 Dashboard":
     st.markdown("<br>", unsafe_allow_html=True)
 
     # ── Série temporelle ───────────────────────────────────
-    st.markdown("<div class='section-title'>Évolution temporelle</div>", unsafe_allow_html=True)
+    st.markdown("<div class='section-title'>Évolution temporelle 2010 → aujourd'hui</div>", unsafe_allow_html=True)
 
     fig_ts, axes_ts = plt.subplots(4, 1, figsize=(15, 9), sharex=True)
     fig_ts.patch.set_facecolor(STYLE["bg"])
@@ -929,7 +929,9 @@ elif page == "📋 Données":
             (float(df["temperature"].min()), float(df["temperature"].max())),
         )
     with col_f3:
-        n_rows = st.number_input("Lignes à afficher", 10, len(df), 50, 10)
+        _max_rows     = max(10, len(df))
+        _default_rows = min(50, _max_rows)
+        n_rows = st.number_input("Lignes à afficher", 10, _max_rows, _default_rows, 10)
 
     df_filtered = df.copy()
     if risk_filter == "Risque = 0":
