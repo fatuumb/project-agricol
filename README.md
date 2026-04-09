@@ -27,4 +27,4 @@ Objectif : aider les agriculteurs à optimiser la production grâce à la data.
 
 ```bash
 pip install -r requirements.txt
-streamlit run app.py
+streamlit run app.py# project-agricol
