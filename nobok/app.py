@@ -4,6 +4,7 @@ Données réelles Open-Meteo | 2010 → semaine -1 dynamique
 Run : streamlit run app.py
 """
 
+from __future__ import annotations
 import streamlit as st
 import pandas as pd
 import numpy as np
