@@ -1,0 +1,25 @@
+# ─────────────────────────────────────────────────────────
+# Smart Agriculture Monitoring — requirements.txt
+# Testé et compatible Streamlit Cloud + Python 3.10/3.11
+# ─────────────────────────────────────────────────────────
+
+streamlit==1.45.1
+pandas==2.2.3
+numpy==1.26.4
+matplotlib==3.9.4
+scikit-learn==1.5.2
+scipy==1.13.1
+requests==2.32.3
+seaborn==0.13.2
+joblib==1.4.2
+pyarrow==17.0.0
+altair==5.4.1
+pydeck==0.9.1
+pillow==10.4.0
+protobuf==4.25.5
+python-dateutil==2.9.0.post0
+packaging==24.2
+click==8.1.8
+toml==0.10.2
+tornado==6.4.2
+tenacity==9.0.0
