@@ -23,7 +23,7 @@ altair==5.3.0
 pydeck==0.9.1
 #Spyarrow==14.0.2
 protobuf==4.25.3
-pillow==10.3.0
+#pillow==10.3.0
 
 # Utilitaires
 python-dateutil==2.9.0.post0
