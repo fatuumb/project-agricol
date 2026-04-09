@@ -154,6 +154,19 @@ div[data-testid='stButton'] button {
     font-weight: 500 !important;
     font-size: 13px !important;
 }
+/* ── Masquer la toolbar Streamlit (Deploy, etc.) ── */
+header[data-testid="stHeader"] {
+    background: transparent !important;
+    height: 0 !important;
+    min-height: 0 !important;
+    visibility: hidden !important;
+}
+#MainMenu { visibility: hidden !important; }
+footer    { visibility: hidden !important; }
+div[data-testid="stToolbar"]         { display: none !important; }
+div[data-testid="stDecoration"]      { display: none !important; }
+div[data-testid="stStatusWidget"]    { display: none !important; }
+div[data-testid="manage-app-button"] { display: none !important; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -182,6 +195,67 @@ def get_end_date() -> str:
 # ─────────────────────────────────────────────────────────
 # Chargement données Open-Meteo
 # ─────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────
+# Labellisation du risque — calibration locale par percentiles
+# ─────────────────────────────────────────────────────────
+def label_risk(df: pd.DataFrame) -> pd.Series:
+    """
+    Calibration adaptative du risque de sécheresse par percentiles locaux.
+
+    Principe : détecter les ANOMALIES par rapport à la norme climatique
+    de chaque région et de chaque mois. Un sol à 5% d'humidité est normal
+    à Dakar en saison sèche — mais anormal en hivernage.
+
+    3 signaux combinés (calibrés sur validation historique) :
+      A — Chaleur extrême locale  : temp_max > P85 du mois
+      B — Sol anormalement sec    : soil_moisture < P20 du mois
+      C — Déficit hydrique cumulé : déficit 14j glissant > P75 du mois
+
+    Risque = True si au moins 2 signaux sur 3 sont actifs.
+    → Taux cible : 10-15% sur longue période, avec pics sur années
+      de sécheresse documentées (Sahel 2011, 2017, 2022).
+    """
+    d = df.copy()
+
+    # Colonne _month nécessaire pour les percentiles mensuels
+    if "date" not in d.columns:
+        d["date"] = pd.date_range("2010-01-01", periods=len(d), freq="D")
+    d["_month"] = pd.to_datetime(d["date"]).dt.month
+
+    # Signal A — Chaleur extrême locale (P85 mensuel)
+    # Seuil relatif : un 35°C en janvier à Dakar = anomalie, pas en juillet
+    p85_temp = d.groupby("_month")["temp_max"].transform(
+        lambda x: x.quantile(0.85)
+    )
+
+    # Signal B — Sol anormalement sec (P20 mensuel)
+    # Détecte un dessèchement inhabituellement bas pour ce mois
+    p20_soil = d.groupby("_month")["soil_moisture"].transform(
+        lambda x: x.quantile(0.20)
+    )
+
+    # Signal C — Déficit hydrique cumulé sur 14 jours (P75 mensuel)
+    # Le stress hydrique s'accumule — un jour sec ne suffit pas,
+    # mais 2 semaines de déficit cumulé indiquent une vraie sécheresse
+    d["_deficit"] = (d["evapotranspiration"] - d["rainfall"]).clip(lower=0)
+    d["_deficit_14d"] = (
+        d["_deficit"].rolling(14, min_periods=5).mean().fillna(d["_deficit"])
+    )
+    p75_deficit = d.groupby("_month")["_deficit_14d"].transform(
+        lambda x: x.quantile(0.75)
+    )
+
+    # Signaux binaires
+    signal_A = (d["temp_max"]      > p85_temp).astype(int)
+    signal_B = (d["soil_moisture"] < p20_soil).astype(int)
+    signal_C = (d["_deficit_14d"]  > p75_deficit).astype(int)
+
+    # Risque si au moins 2 signaux sur 3 actifs simultanément
+    risk = ((signal_A + signal_B + signal_C) >= 2).astype(int)
+
+    return risk
+
+
 @st.cache_data(ttl=3600, show_spinner=False)
 def fetch_real_weather(lat: float, lon: float,
                        start_date: str = "2010-01-01",
@@ -227,11 +301,7 @@ def fetch_real_weather(lat: float, lon: float,
         df["soil_moisture"] = (df["soil_moisture_raw"] * 100).clip(0, 60).round(2)
         df = df.dropna(subset=["temperature", "humidity", "rainfall", "soil_moisture"])
 
-        df["risk"] = (
-            ((df["temp_max"] > 36) & (df["humidity"] < 40)) |
-            ((df["soil_moisture"] < 10) & (df["rainfall"] < 1)) |
-            ((df["temp_max"] > 40) & (df["soil_moisture"] < 18))
-        ).astype(int)
+        df["risk"] = label_risk(df)
 
         return df.reset_index(drop=True)
 
@@ -250,11 +320,13 @@ def _generate_fallback_data() -> pd.DataFrame:
     soil     = np.random.uniform(5, 55, n)
     wind     = np.random.uniform(5, 35, n)
     evap     = np.random.uniform(2, 8, n)
-    risk     = (
-        ((temp > 36) & (hum < 40)) |
-        ((soil < 10) & (rain < 1)) |
-        ((temp > 40) & (soil < 18))
-    ).astype(int)
+    risk = label_risk(pd.DataFrame({
+        "temp_max": temp + 3, "temp_min": temp - 3,
+        "temperature": temp, "humidity": hum,
+        "humidity_max": hum + 8, "humidity_min": hum - 8,
+        "rainfall": rain, "soil_moisture": soil,
+        "evapotranspiration": evap, "wind_speed": wind,
+    })).values
     return pd.DataFrame({
         "date": dates,
         "temperature": temp.round(2), "temp_max": (temp+3).round(2), "temp_min": (temp-3).round(2),
@@ -372,44 +444,68 @@ with st.sidebar:
     st.markdown("---")
     st.markdown("<div class='sidebar-sep'>Période d'analyse</div>", unsafe_allow_html=True)
 
-    # Bornes absolues disponibles
     ABS_MIN = date(2010, 1, 1)
-    ABS_MAX = date.today() - timedelta(days=date.today().weekday() + 7)  # lundi sem -1
+    ABS_MAX = date.today() - timedelta(days=date.today().weekday() + 7)
 
-    # Sélecteur de plage avec date_input (deux dates)
+    # Valeurs par défaut stockées dans session_state (sans key sur le widget)
+    if "fs" not in st.session_state:
+        st.session_state["fs"] = ABS_MIN
+    if "fe" not in st.session_state:
+        st.session_state["fe"] = ABS_MAX
+
+    # Boutons présélection : écrivent dans fs/fe puis st.rerun()
+    # Placés AVANT le date_input pour que la value soit correcte au rendu
+    col_p1, col_p2, col_p3 = st.columns(3)
+    if col_p1.button("1 an",  use_container_width=True):
+        try:
+            st.session_state["fs"] = ABS_MAX.replace(year=ABS_MAX.year - 1)
+        except ValueError:
+            st.session_state["fs"] = ABS_MAX - timedelta(days=365)
+        st.session_state["fe"] = ABS_MAX
+        st.rerun()
+    if col_p2.button("5 ans", use_container_width=True):
+        try:
+            st.session_state["fs"] = ABS_MAX.replace(year=ABS_MAX.year - 5)
+        except ValueError:
+            st.session_state["fs"] = ABS_MAX - timedelta(days=5 * 365)
+        st.session_state["fe"] = ABS_MAX
+        st.rerun()
+    if col_p3.button("Tout",  use_container_width=True):
+        st.session_state["fs"] = ABS_MIN
+        st.session_state["fe"] = ABS_MAX
+        st.rerun()
+
+    # date_input SANS key → Streamlit ne bloque pas la mise à jour de value
+    # La value est relue depuis fs/fe à chaque rerun
     date_range = st.date_input(
-        "Du … au …",
-        value=(ABS_MIN, ABS_MAX),
+        "Période",
+        value=(st.session_state["fs"], st.session_state["fe"]),
         min_value=ABS_MIN,
         max_value=ABS_MAX,
         format="DD/MM/YYYY",
         label_visibility="collapsed",
     )
 
-    # Robustesse : date_input retourne un tuple de 1 ou 2 éléments selon l'état
+    # Lecture du résultat : tuple de 2 quand les deux dates sont sélectionnées
     if isinstance(date_range, (list, tuple)) and len(date_range) == 2:
-        filter_start, filter_end = date_range
+        filter_start = max(date_range[0], ABS_MIN)
+        filter_end   = min(date_range[1], ABS_MAX)
+        # Persister pour les boutons suivants
+        st.session_state["fs"] = filter_start
+        st.session_state["fe"] = filter_end
     else:
+        # En cours de saisie (1 seule date cliquée) → garder l'ancienne valeur
+        filter_start = st.session_state["fs"]
+        filter_end   = st.session_state["fe"]
+
+    # Sécurité inversion
+    if filter_end < filter_start:
         filter_start, filter_end = ABS_MIN, ABS_MAX
-
-    filter_start = max(filter_start, ABS_MIN)
-    filter_end   = min(filter_end,   ABS_MAX)
-
-    # Boutons de présélection rapide
-    col_p1, col_p2, col_p3 = st.columns(3)
-    if col_p1.button("1 an",  use_container_width=True):
-        filter_start = ABS_MAX.replace(year=ABS_MAX.year - 1)
-        filter_end   = ABS_MAX
-    if col_p2.button("5 ans", use_container_width=True):
-        filter_start = ABS_MAX.replace(year=ABS_MAX.year - 5)
-        filter_end   = ABS_MAX
-    if col_p3.button("Tout",  use_container_width=True):
-        filter_start = ABS_MIN
-        filter_end   = ABS_MAX
+        st.session_state["fs"], st.session_state["fe"] = filter_start, filter_end
 
     st.caption(
         f"{filter_start.strftime('%d %b %Y')} → {filter_end.strftime('%d %b %Y')} "
-        f"({(filter_end - filter_start).days:,} jours)"
+        f"· {(filter_end - filter_start).days:,} jours"
     )
 
     # ── Chargement données complètes (cache) ─────────────
@@ -501,7 +597,7 @@ if page == "📊 Dashboard":
     st.markdown("<br>", unsafe_allow_html=True)
 
     # ── Série temporelle ───────────────────────────────────
-    st.markdown("<div class='section-title'>Évolution temporelle 2010 → aujourd'hui</div>", unsafe_allow_html=True)
+    st.markdown("<div class='section-title'>Évolution temporelle</div>", unsafe_allow_html=True)
 
     fig_ts, axes_ts = plt.subplots(4, 1, figsize=(15, 9), sharex=True)
     fig_ts.patch.set_facecolor(STYLE["bg"])
