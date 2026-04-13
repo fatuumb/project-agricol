@@ -1,5 +1,5 @@
 """
-BayAI — Dashboard Streamlit v3.0
+XamSaSoof — Dashboard Streamlit v3.0
 Données réelles Open-Meteo | 2010 → semaine -1 dynamique
 Run : streamlit run app.py
 """
@@ -27,7 +27,7 @@ from sklearn.metrics import (
 # Config page
 # ─────────────────────────────────────────────────────────
 st.set_page_config(
-    page_title="BayAI — Smart Agriculture",
+    page_title="XamSaSoof — Smart Agriculture",
     page_icon="🌾",
     layout="wide",
 )
@@ -124,15 +124,15 @@ html, body, [class*="css"] { font-family: 'DM Sans', sans-serif; }
     margin: 14px 0 5px;
 }
 
-.bayai-header {
+.XamSaSoof-header {
     display: flex;
     align-items: center;
     gap: 14px;
     padding: 6px 0 14px;
 }
-.bayai-logo  { font-size: 34px; line-height: 1; }
-.bayai-title { font-size: 24px; font-weight: 600; color: #1a2e1a; letter-spacing: -.02em; }
-.bayai-sub   { font-size: 12px; color: #7a8a7a; margin-top: 2px; }
+.XamSaSoof-logo  { font-size: 34px; line-height: 1; }
+.XamSaSoof-title { font-size: 24px; font-weight: 600; color: #1a2e1a; letter-spacing: -.02em; }
+.XamSaSoof-sub   { font-size: 12px; color: #7a8a7a; margin-top: 2px; }
 .header-divider { border: none; border-top: 1.5px solid #e0ebe0; margin: 0 0 18px; }
 
 /* ── Sliders ── */
@@ -429,7 +429,7 @@ def style_ax(ax):
 # SIDEBAR
 # ─────────────────────────────────────────────────────────
 with st.sidebar:
-    st.markdown("## 🌾 BayAI")
+    st.markdown("## 🌾 XamSaSoof")
 
     st.markdown("<div class='sidebar-sep'>Région agricole</div>", unsafe_allow_html=True)
     city = st.selectbox("", list(CITIES.keys()), label_visibility="collapsed")
@@ -533,7 +533,7 @@ with st.sidebar:
     st.metric("ROC-AUC", f"{auc_score:.3f}")
 
     st.markdown(
-        "<br><span class='sidebar-pill'>✅ Open-Meteo · sans clé API</span>",
+        "<br><span class='sidebar-pill'> Open-Meteo · sans clé API</span>",
         unsafe_allow_html=True,
     )
 
@@ -541,11 +541,11 @@ with st.sidebar:
 # HEADER
 # ─────────────────────────────────────────────────────────
 st.markdown(f"""
-<div class="bayai-header">
-  <div class="bayai-logo">🌾</div>
+<div class="XamSaSoof-header">
+  <div class="XamSaSoof-logo">🌾</div>
   <div>
-    <div class="bayai-title">BayAI</div>
-    <div class="bayai-sub">
+    <div class="XamSaSoof-title">XamSaSoof</div>
+    <div class="XamSaSoof-sub">
       Détection du risque de sécheresse &nbsp;·&nbsp;
       {filter_start.strftime('%d %b %Y')} → {filter_end.strftime('%d %b %Y')} &nbsp;·&nbsp; {city}
     </div>
@@ -969,7 +969,7 @@ elif page == "📋 Données":
         st.download_button(
             "⬇️ Télécharger le dataset (CSV)",
             data=df[display_cols].to_csv(index=False).encode("utf-8"),
-            file_name=f"bayai_{city_slug}_{start_slug}_{end_slug}.csv",
+            file_name=f"XamSaSoof_{city_slug}_{start_slug}_{end_slug}.csv",
             mime="text/csv",
         )
     with col_dl2:
